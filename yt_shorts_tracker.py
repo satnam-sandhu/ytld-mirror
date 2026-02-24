@@ -8,30 +8,39 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(SCRIPT_DIR, "processed_shorts.json")
 DOWNLOAD_DIR = os.path.join(SCRIPT_DIR, "downloads")
 
-def get_latest_short_id(channel_url):
+def normalize_url(url):
     """
-    Uses yt-dlp to get the ID of the latest short from the channel.
+    Normalizes the channel URL by removing trailing slashes and /shorts suffix.
     """
-    sys.stderr.write(f"Checking for latest shorts on: {channel_url}\n")
+    url = url.strip().rstrip("/")
+    if url.endswith("/shorts"):
+        url = url[:-7].rstrip("/")
+    return url
+
+def get_recent_short_ids(channel_url, limit=5):
+    """
+    Uses yt-dlp to get the IDs of the most recent shorts.
+    """
+    sys.stderr.write(f"Checking for recent shorts on: {channel_url}\n")
     
-    # We append /shorts to the channel URL to target specifically the shorts tab
-    shorts_url = channel_url.rstrip("/") + "/shorts"
+    shorts_url = channel_url + "/shorts"
     
     cmd = [
         "yt-dlp",
         "--get-id",
-        "--playlist-items", "1",
+        "--playlist-items", str(limit),
         "--flat-playlist",
         shorts_url
     ]
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        video_id = result.stdout.strip()
-        return video_id
+        # Returns a list of IDs (one per line)
+        ids = [i.strip() for i in result.stdout.strip().split("\n") if i.strip()]
+        return ids
     except subprocess.CalledProcessError as e:
         sys.stderr.write(f"Error fetching channel data: {e.stderr}\n")
-        return None
+        return []
 
 def download_short(video_id):
     """
@@ -59,10 +68,12 @@ def download_short(video_id):
         # Now download
         download_cmd = [
             "yt-dlp",
+            "-q", # Quiet mode to keep stdout clean
             "-o", target_file,
             url
         ]
-        subprocess.run(download_cmd, check=True)
+        # Run download and redirect stdout to stderr just in case
+        subprocess.run(download_cmd, check=True, stdout=sys.stderr)
         sys.stderr.write("Download complete.\n")
         return target_file
     except subprocess.CalledProcessError as e:
@@ -90,39 +101,50 @@ def main():
         sys.stderr.write("Usage: python yt_shorts_tracker.py <channel_url>\n")
         sys.exit(1)
         
-    channel_url = sys.argv[1].rstrip("/")
+    channel_url = normalize_url(sys.argv[1])
     
-    # 1. Get the latest short ID from the channel
-    latest_id = get_latest_short_id(channel_url)
+    # 1. Get recent short IDs
+    recent_ids = get_recent_short_ids(channel_url, limit=5)
     
-    if not latest_id:
-        sys.stderr.write("Could not find any shorts on this channel.\n")
+    if not recent_ids:
+        sys.stderr.write(f"No shorts found on {channel_url}.\n")
         return None
 
-    # 2. Check the saved ID in the tracking file (JSON format)
+    # 2. Load state
     state = load_state()
-    saved_id = state.get(channel_url)
+    processed_ids = state.get(channel_url, [])
+    if isinstance(processed_ids, str): # Handle old format (single string)
+        processed_ids = [processed_ids]
             
-    # 3. Compare and act
-    if latest_id == saved_id:
-        sys.stderr.write(f"No new shorts found for {channel_url}. (Current ID: {latest_id})\n")
-        return None
-    else:
-        sys.stderr.write(f"New short detected on {channel_url}! (New ID: {latest_id}, Old ID: {saved_id})\n")
-        
-        # 4. Download the new short
-        downloaded_file = download_short(latest_id)
-        if downloaded_file:
-            # 5. Update the tracking state
-            state[channel_url] = latest_id
-            save_state(state)
-            sys.stderr.write(f"Updated {STATE_FILE} with new ID for {channel_url}.\n")
-            
-            # Print to stdout for the orchestrator to capture
-            print(downloaded_file)
-            return downloaded_file
+    # 3. Find IDs that haven't been processed
+    new_ids = [rid for rid in recent_ids if rid not in processed_ids]
     
-    return None
+    if not new_ids:
+        sys.stderr.write(f"No new shorts found for {channel_url}.\n")
+        return None
+    
+    sys.stderr.write(f"Found {len(new_ids)} new shorts for {channel_url}.\n")
+    
+    downloaded_files = []
+    # Process from oldest to newest among the new ones
+    for vid in reversed(new_ids):
+        downloaded_file = download_short(vid)
+        if downloaded_file:
+            processed_ids.append(vid)
+            # Clip the list to keep it manageable (e.g., last 50 IDs)
+            processed_ids = processed_ids[-50:]
+            downloaded_files.append(downloaded_file)
+            
+    # 4. Save state
+    if downloaded_files:
+        state[channel_url] = processed_ids
+        save_state(state)
+        
+        # 5. Print each file path to stdout for orchestrator
+        for df in downloaded_files:
+            print(df)
+        
+    return downloaded_files
 
 if __name__ == "__main__":
     main()
