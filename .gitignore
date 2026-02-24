@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Project specific
+downloads/
+processed_shorts.json
+last_short_id.txt
+
+# OS
+.DS_Store
