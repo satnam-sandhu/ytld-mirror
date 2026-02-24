@@ -4,8 +4,8 @@ A powerful automation pipeline to track YouTube channels for new Shorts, downloa
 
 ## 🚀 Features
 
-- **Multi-Channel Tracking**: Tracks multiple channels independently using JSON state.
-- **Smart Downloading**: Only downloads when a new video ID is detected.
+- **Robust Detection**: Automatically resolves handles (e.g., `@username`) to canonical Channel IDs for stable tracking.
+- **Latest-Only Processing**: Strictly tracks and processes only the most recent Short to keep your channel feed fresh.
 - **Auto-Watermarking**: Adds a centered "hecker boizz" watermark with 50% opacity using FFmpeg.
 - **YouTube Uploading**: Handles OAuth2 and resumable uploads via YouTube Data API v3.
 - **Cron Orchestration**: Manage automated tasks with simple bash scripts.
