@@ -5,10 +5,11 @@ import shutil
 
 FONT_PATH = "/System/Library/Fonts/HelveticaNeue.ttc"
 WATERMARK_TEXT = "hecker boizz"
+WATERMARK_OPACITY = 0.5  # 50% transparency
 
 def add_watermark(input_path):
     """
-    Adds a centered watermark with 20% transparency to a video and replaces the original.
+    Adds a centered watermark with variable transparency to a video and replaces the original.
     """
     if not os.path.exists(input_path):
         print(f"Error: File {input_path} does not exist.")
@@ -18,13 +19,13 @@ def add_watermark(input_path):
     
     # FFmpeg command:
     # x=(w-text_w)/2:y=(h-text_h)/2  -> centered
-    # fontcolor=white@0.2            -> 20% transparency
+    # fontcolor=white@OPACITY        -> variable transparency
     
     # We use -y to overwrite temp file if exists
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-vf", f"drawtext=text='{WATERMARK_TEXT}':fontfile={FONT_PATH}:x=(w-text_w)/2:y=(h-text_h)/2:fontsize=48:fontcolor=white@0.2",
+        "-vf", f"drawtext=text='{WATERMARK_TEXT}':fontfile={FONT_PATH}:x=(w-text_w)/2:y=(h-text_h)/2:fontsize=48:fontcolor=white@{WATERMARK_OPACITY}",
         "-codec:a", "copy",
         temp_output
     ]
