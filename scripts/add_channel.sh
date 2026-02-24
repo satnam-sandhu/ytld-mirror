@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Get the directory where this script is located
-PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PROJECT_DIR="$( dirname "$SCRIPTS_DIR" )"
 ORCHESTRATOR="$PROJECT_DIR/orchestrator.py"
 # Try to find the conda python or use system python
 PYTHON_CMD="$(which python)"
