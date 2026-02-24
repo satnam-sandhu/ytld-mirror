@@ -17,18 +17,48 @@ def normalize_url(url):
         url = url[:-7].rstrip("/")
     return url
 
+def get_canonical_url(channel_url):
+    """
+    Resolves the canonical channel ID URL.
+    Does a two-step resolution:
+    1. Get a single video ID from the channel.
+    2. Get the channel_id from that video's metadata.
+    """
+    # Step 1: Get any video ID
+    cmd1 = ["yt-dlp", "--get-id", "--playlist-items", "1", "--flat-playlist", channel_url]
+    try:
+        res1 = subprocess.run(cmd1, capture_output=True, text=True, check=True)
+        video_id = res1.stdout.strip()
+        if video_id:
+            # Step 2: Get channel_id from that video
+            video_url = f"https://www.youtube.com/shorts/{video_id}"
+            cmd2 = ["yt-dlp", "--print", "channel_id", "--playlist-items", "0", video_url]
+            res2 = subprocess.run(cmd2, capture_output=True, text=True, check=True)
+            cid = res2.stdout.strip()
+            if cid and cid != "NA":
+                canonical = f"https://www.youtube.com/channel/{cid}"
+                sys.stderr.write(f"Resolved canonical URL: {canonical}\n")
+                return canonical
+    except subprocess.CalledProcessError:
+        pass
+    
+    sys.stderr.write(f"Falling back to original URL: {channel_url}\n")
+    return channel_url
+
 def get_recent_short_ids(channel_url, limit=5):
     """
     Uses yt-dlp to get the IDs of the most recent shorts.
     """
-    sys.stderr.write(f"Checking for recent shorts on: {channel_url}\n")
+    # Use the /shorts tab of the canonical channel URL for stability
+    canonical_base = get_canonical_url(channel_url)
+    shorts_url = canonical_base.rstrip("/") + "/shorts"
     
-    shorts_url = channel_url + "/shorts"
+    sys.stderr.write(f"Checking for recent shorts on: {shorts_url}\n")
     
     cmd = [
         "yt-dlp",
         "--get-id",
-        "--playlist-items", str(limit),
+        "--playlist-end", str(limit),
         "--flat-playlist",
         shorts_url
     ]
@@ -104,7 +134,7 @@ def main():
     channel_url = normalize_url(sys.argv[1])
     
     # 1. Get recent short IDs
-    recent_ids = get_recent_short_ids(channel_url, limit=5)
+    recent_ids = get_recent_short_ids(channel_url, limit=10)
     
     if not recent_ids:
         sys.stderr.write(f"No shorts found on {channel_url}.\n")
